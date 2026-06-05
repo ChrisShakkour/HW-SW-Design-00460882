@@ -9,6 +9,10 @@
 # =============================================================================
 set -euo pipefail
 
+# Always run from the script's own directory so relative paths (src/...) resolve
+# regardless of where the script was invoked from.
+cd "$(dirname "$0")"
+
 CXX=${CXX:-g++}
 CXXFLAGS="-O3 -march=native -std=c++17 -DVERBOSE=0"
 
