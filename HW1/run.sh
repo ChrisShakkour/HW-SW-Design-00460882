@@ -2,7 +2,7 @@
 # =============================================================================
 # run.sh -- compile, run, verify, and profile both 1x1-conv versions.
 #
-# Both versions are compiled with the SAME flags (-O3 -march=native) so any
+# Both versions are compiled with the SAME flags (-O3 -mavx2 -mfma) so any
 # measured difference is due to the data-layout / cache / register-blocking
 # optimization, NOT compiler flags. VERBOSE=0 disables all progress prints so
 # stdout contains only the RESULT line (clean for diffing and for perf).
@@ -14,7 +14,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 CXX=${CXX:-g++}
-CXXFLAGS="-O3 -march=native -std=c++17 -DVERBOSE=0"
+# Portable AVX2+FMA build (same flags for both versions so the difference is the
+# optimization, not the compiler). Use -march=native instead if compiling and
+# profiling on the same machine.
+CXXFLAGS="-O3 -mavx2 -mfma -std=c++17 -DVERBOSE=0"
 
 echo "=== Compiling (flags: $CXXFLAGS) ==="
 $CXX $CXXFLAGS src/conv1x1_naive.cpp -o conv1x1_naive
