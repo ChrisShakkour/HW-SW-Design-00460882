@@ -5,6 +5,11 @@
 //
 //     out[co][h][w] = sum_ci  in[ci][h][w] * weight[co][ci]
 //
+// LAYOUT NOTE: NCHW / NHWC name the order the tensor dimensions are stored in
+// memory, from slowest- to fastest-changing: N=batch, C=channels, H=height,
+// W=width. NCHW stores width fastest (channels of one pixel are H*W apart);
+// NHWC stores channels fastest (all channels of one pixel are adjacent).
+//
 // WHAT CHANGED (and the hardware insight behind it)
 //   1. DATA LAYOUT  NCHW -> NHWC.
 //      We transpose the input so that, for a fixed pixel, the Cin channel

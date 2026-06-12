@@ -1,9 +1,10 @@
-import sys, re
+import sys, re, os
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 src, dst = sys.argv[1], sys.argv[2]
+srcdir = os.path.dirname(os.path.abspath(src))
 with open(src, encoding="utf-8") as f:
     lines = f.read().split("\n")
 
@@ -76,6 +77,11 @@ while i < n:
         while i < n and lines[i].strip().startswith("|"):
             rows.append(lines[i]); i += 1
         add_table(rows); continue
+    elif line.strip().startswith("!["):
+        m = re.match(r"!\[[^\]]*\]\(([^)]+)\)", line.strip())
+        img = os.path.normpath(os.path.join(srcdir, m.group(1)))
+        p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run().add_picture(img, width=Inches(5.6))
     elif line.strip().startswith("- "):
         p = doc.add_paragraph(style="List Bullet")
         add_runs(p, line.strip()[2:])

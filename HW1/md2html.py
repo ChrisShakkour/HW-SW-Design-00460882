@@ -28,6 +28,7 @@ th { background: #eef1f5; }
 blockquote { border-left: 3px solid #bbb; margin: 6px 0; padding: 2px 10px; color: #444; }
 strong { color: #111; }
 hr { border: none; border-top: 1px solid #ccc; margin: 12px 0; }
+img { max-width: 78%; display: block; margin: 8px auto; border: 1px solid #ccc; }
 """
 
 html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">

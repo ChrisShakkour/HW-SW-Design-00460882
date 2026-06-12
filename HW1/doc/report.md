@@ -38,6 +38,14 @@ instead of the cycle counter.
 This is the version most people would write first. The data is stored in NCHW order, and the
 loops just go `(co, h, w, ci)` with an accumulator in the middle.
 
+> **Note on layout.** NCHW and NHWC just name the order the tensor dimensions are kept in
+> memory, listed from the slowest-changing to the fastest-changing: N = batch, C = channels,
+> H = height, W = width. In **NCHW** the width changes fastest, so one whole channel image is
+> stored contiguously, but jumping to the next channel of the same pixel skips H×W elements.
+> In **NHWC** the channels change fastest, so all the channels of a single pixel sit right
+> next to each other. Our two versions differ only in this choice, and that is the whole
+> story of the speedup.
+
 The problem is the inner loop. It sums over the input channel `ci`, but in NCHW two channels
 of the same pixel sit `H*W = 16384` floats apart, which is 64 KB:
 
@@ -138,6 +146,15 @@ each one takes. An L1 hit is a few cycles while a miss can be tens or hundreds, 
 smaller number of mostly-missing loads for a larger number of mostly-hitting loads is a big
 net win. You can see the same thing in the instruction rate, which goes up about 9.7×
 because the CPU is finally being kept busy instead of stalling on memory.
+
+Here is the raw output from one of our `perf` runs, showing both versions back to back:
+
+![Example perf run comparing the naive and optimized versions](../perf.png)
+
+The exact figures shift a little from run to run (the L1 miss percentage even reads slightly
+over 100 % on one run, which happens on this VM because the counters are sampled rather than
+exact), but the picture is always the same: the naive version misses L1 almost every time
+while the optimized version almost never does.
 
 ## Things we tried or considered
 

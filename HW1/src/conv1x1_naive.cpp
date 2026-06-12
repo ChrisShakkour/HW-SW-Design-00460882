@@ -7,6 +7,11 @@
 //
 //     out[co][h][w] = sum_ci  in[ci][h][w] * weight[co][ci]
 //
+// LAYOUT NOTE: NCHW / NHWC name the order the tensor dimensions are stored in
+// memory, from slowest- to fastest-changing: N=batch, C=channels, H=height,
+// W=width. In NCHW (used here) width changes fastest, so one channel image is
+// contiguous but the next channel of the same pixel is H*W elements away.
+//
 // WHY THIS IS THE "NAIVE" VERSION
 //   * Data is stored in NCHW layout (channel-major). The reduction loop runs
 //     over the input channel `ci`, but consecutive `ci` values are H*W floats
