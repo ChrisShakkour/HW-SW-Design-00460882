@@ -1,24 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
-# script.sh -- install deps, run the correctness test suite, run the shared
-# deterministic workload against both architectures, verify they agree, then
-# profile both with perf (Part 4). Run from anywhere; it cds to its own dir.
+# script.sh -- run the shared deterministic workload against both
+# architectures, verify they agree, then profile both with perf + FlameGraphs
+# (Part 4). Run from anywhere; it cds to its own dir. Assumes python3/perf/git
+# are already installed on this machine. Safe to run without perf (Part 4
+# exits early with a message).
+#
+# Override knobs:
+#   PYTHON=python3.12 NUM_RIDES=200 REPS=5 ./script.sh
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
 
 PYTHON=${PYTHON:-python3}
-NUM_RIDES=${NUM_RIDES:-50}
-
-echo "=== Installing test dependencies (pytest) ==="
-"$PYTHON" -m pip install --quiet pytest
-
-echo
-echo "=== Running correctness test suite (pytest) ==="
-"$PYTHON" -m pytest tests/ -v
+NUM_RIDES=${NUM_RIDES:-200}   # rides fed to both the correctness diff AND the perf workload
+REPS=${REPS:-5}               # perf stat repetitions, for mean +/- stddev instead of one noisy sample
 
 # ---- Shared deterministic workload: same fleet/rides fed to both -----------
-echo
 echo "=== Running deterministic workload: Traditional ($NUM_RIDES rides) ==="
 "$PYTHON" Traditional/run_workload.py --num-rides "$NUM_RIDES" | tee out_traditional.txt
 
@@ -38,34 +36,67 @@ fi
 
 # ---- Part 4: profiling -------------------------------------------------------
 echo
-if command -v perf > /dev/null 2>&1; then
-    PERF_EVENTS="cycles,instructions,context-switches,page-faults,cpu-clock"
-
-    echo "=== perf stat: Traditional ==="
-    perf stat -e "$PERF_EVENTS" "$PYTHON" Traditional/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
-
-    echo
-    echo "=== perf stat: FaaS ==="
-    perf stat -e "$PERF_EVENTS" "$PYTHON" FaaS/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
-
-    echo
-    if command -v stackcollapse-perf.pl > /dev/null 2>&1 && command -v flamegraph.pl > /dev/null 2>&1; then
-        echo "=== Recording FlameGraphs (requires brendangregg/FlameGraph on PATH) ==="
-        perf record -F 999 -g -o perf_traditional.data -- "$PYTHON" Traditional/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
-        perf script -i perf_traditional.data | stackcollapse-perf.pl | flamegraph.pl > flamegraph_traditional.svg
-
-        perf record -F 999 -g -o perf_faas.data -- "$PYTHON" FaaS/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
-        perf script -i perf_faas.data | stackcollapse-perf.pl | flamegraph.pl > flamegraph_faas.svg
-
-        echo "Wrote flamegraph_traditional.svg and flamegraph_faas.svg"
-    else
-        echo "FlameGraph scripts (stackcollapse-perf.pl / flamegraph.pl) not found on PATH."
-        echo "perf stat results above are still valid; install github.com/brendangregg/FlameGraph for SVGs."
-    fi
-else
+if ! command -v perf > /dev/null 2>&1; then
     echo "perf not found on this system -- skipping Part 4 profiling."
     echo "Run this script on a Linux machine with perf installed to collect profiling data for the report."
+    echo
+    echo "=== Done ==="
+    exit 0
 fi
 
+RESULTS_DIR="perf_results"
+mkdir -p "$RESULTS_DIR"
+
+PERF_EVENTS="cycles,instructions,context-switches,page-faults,cpu-clock"
+
+echo "=== perf stat: Traditional ($REPS reps) ==="
+rm -f "$RESULTS_DIR/perf_stat_traditional.txt"
+perf stat -r "$REPS" -e "$PERF_EVENTS" -o "$RESULTS_DIR/perf_stat_traditional.txt" \
+    "$PYTHON" Traditional/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
+cat "$RESULTS_DIR/perf_stat_traditional.txt"
+
 echo
-echo "=== Done ==="
+echo "=== perf stat: FaaS ($REPS reps) ==="
+rm -f "$RESULTS_DIR/perf_stat_faas.txt"
+perf stat -r "$REPS" -e "$PERF_EVENTS" -o "$RESULTS_DIR/perf_stat_faas.txt" \
+    "$PYTHON" FaaS/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
+cat "$RESULTS_DIR/perf_stat_faas.txt"
+
+# ---- FlameGraphs: auto-fetch Brendan Gregg's scripts if not already on PATH -
+echo
+FLAMEGRAPH_DIR=".flamegraph-tools"
+if command -v stackcollapse-perf.pl > /dev/null 2>&1 && command -v flamegraph.pl > /dev/null 2>&1; then
+    STACKCOLLAPSE="stackcollapse-perf.pl"
+    FLAMEGRAPH="flamegraph.pl"
+else
+    if [[ ! -d "$FLAMEGRAPH_DIR" ]]; then
+        echo "=== Fetching FlameGraph scripts (github.com/brendangregg/FlameGraph) ==="
+        git clone --quiet --depth 1 https://github.com/brendangregg/FlameGraph.git "$FLAMEGRAPH_DIR"
+    fi
+    STACKCOLLAPSE="$FLAMEGRAPH_DIR/stackcollapse-perf.pl"
+    FLAMEGRAPH="$FLAMEGRAPH_DIR/flamegraph.pl"
+fi
+
+# Python 3.12+ can emit /tmp/perf-<pid>.map symbol files so perf resolves real
+# Python function names instead of repeated CPython interpreter C frames.
+export PYTHONPERFSUPPORT=1
+
+echo "=== Recording FlameGraph: Traditional ==="
+perf record -F 999 -g -o "$RESULTS_DIR/perf_traditional.data" -- \
+    "$PYTHON" Traditional/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
+perf script -i "$RESULTS_DIR/perf_traditional.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
+    > "$RESULTS_DIR/flamegraph_traditional.svg"
+
+echo "=== Recording FlameGraph: FaaS ==="
+perf record -F 999 -g -o "$RESULTS_DIR/perf_faas.data" -- \
+    "$PYTHON" FaaS/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
+perf script -i "$RESULTS_DIR/perf_faas.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
+    > "$RESULTS_DIR/flamegraph_faas.svg"
+
+echo
+echo "=== Done -- send back the '$RESULTS_DIR' directory ==="
+echo "It contains:"
+echo "  $RESULTS_DIR/perf_stat_traditional.txt"
+echo "  $RESULTS_DIR/perf_stat_faas.txt"
+echo "  $RESULTS_DIR/flamegraph_traditional.svg"
+echo "  $RESULTS_DIR/flamegraph_faas.svg"

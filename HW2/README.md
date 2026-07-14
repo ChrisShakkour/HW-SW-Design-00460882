@@ -127,13 +127,13 @@ cd HW2
 
 This does everything in one pass:
 1. Installs `pytest`.
-2. Runs the full test suite (`tests/`) — 40 tests covering both architectures individually plus cross-architecture equivalence scenarios.
-3. Runs the same deterministic 50-ride workload against `Traditional/run_workload.py` and `FaaS/run_workload.py`, and diffs their output — proving the two architectures are functionally equivalent despite being structurally different.
-4. If `perf` is available (Linux only — this step is skipped with a message on Windows/macOS dev machines), runs `perf stat` on both workloads, and — if the [FlameGraph](https://github.com/brendangregg/FlameGraph) scripts are on `PATH` — records call-stack profiles and renders `flamegraph_traditional.svg` / `flamegraph_faas.svg`.
+2. Runs the full test suite (`tests/`) — 47 tests covering both architectures individually plus cross-architecture equivalence scenarios.
+3. Runs the same deterministic 200-ride workload against `Traditional/run_workload.py` and `FaaS/run_workload.py`, and diffs their output — proving the two architectures are functionally equivalent despite being structurally different.
+4. **If `perf` is available** (Linux only — this step exits early with a message on Windows/macOS dev machines): runs `perf stat` (5 repetitions, for a mean instead of one noisy sample) on both workloads, then **auto-fetches** the [FlameGraph](https://github.com/brendangregg/FlameGraph) scripts (git-clones them into `.flamegraph-tools/` if not already on `PATH`) and records+renders `flamegraph_traditional.svg` / `flamegraph_faas.svg`. Everything from this step lands in `perf_results/` — that's the directory to copy back off the Linux machine for the report.
 
-Override the ride count or interpreter if needed:
+Override the ride count, repetitions, or interpreter if needed:
 ```bash
-NUM_RIDES=200 PYTHON=python3 ./script.sh
+NUM_RIDES=500 REPS=10 PYTHON=python3.12 ./script.sh
 ```
 
 ### Running things individually
