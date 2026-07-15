@@ -69,44 +69,32 @@ perf stat -r "$REPS" -e "$PERF_EVENTS" -o "$RESULTS_DIR/perf_stat_faas.txt" \
     "$PYTHON" FaaS/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
 cat "$RESULTS_DIR/perf_stat_faas.txt"
 
-# ---- FlameGraphs: auto-fetch Brendan Gregg's scripts if not already on PATH -
+# ---- FlameGraphs: py-spy samples the CPython interpreter stack directly,
+# sidestepping perf's kernel-level frame-pointer/DWARF call-graph unwinding
+# (which doesn't reliably capture Python stacks, especially under nested
+# virtualization like this KVM guest). perf stat above is still the real
+# OS-level evidence; py-spy is just for the visual call-stack breakdown.
 echo
-FLAMEGRAPH_DIR=".flamegraph-tools"
-if command -v stackcollapse-perf.pl > /dev/null 2>&1 && command -v flamegraph.pl > /dev/null 2>&1; then
-    STACKCOLLAPSE="stackcollapse-perf.pl"
-    FLAMEGRAPH="flamegraph.pl"
-else
-    if [[ ! -d "$FLAMEGRAPH_DIR" ]]; then
-        echo "=== Fetching FlameGraph scripts (github.com/brendangregg/FlameGraph) ==="
-        git clone --quiet --depth 1 https://github.com/brendangregg/FlameGraph.git "$FLAMEGRAPH_DIR"
-    fi
-    STACKCOLLAPSE="$FLAMEGRAPH_DIR/stackcollapse-perf.pl"
-    FLAMEGRAPH="$FLAMEGRAPH_DIR/flamegraph.pl"
+if ! command -v py-spy > /dev/null 2>&1; then
+    echo "=== Installing py-spy ==="
+    "$PYTHON" -m pip install --quiet py-spy
 fi
 
-# Python 3.12+ can emit /tmp/perf-<pid>.map symbol files so perf resolves real
-# Python function names instead of repeated CPython interpreter C frames.
-export PYTHONPERFSUPPORT=1
-
 echo "=== Recording FlameGraph: Traditional ($FG_RIDES_TRADITIONAL rides) ==="
-if perf record -F 999 -g -o "$RESULTS_DIR/perf_traditional.data" -- \
-        "$PYTHON" Traditional/run_workload.py --num-rides "$FG_RIDES_TRADITIONAL" > /dev/null \
-   && perf script -i "$RESULTS_DIR/perf_traditional.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
-        > "$RESULTS_DIR/flamegraph_traditional.svg"; then
+if py-spy record -o "$RESULTS_DIR/flamegraph_traditional.svg" -- \
+        "$PYTHON" Traditional/run_workload.py --num-rides "$FG_RIDES_TRADITIONAL" > /dev/null; then
     echo "Wrote $RESULTS_DIR/flamegraph_traditional.svg"
 else
-    echo "WARNING: FlameGraph recording for Traditional failed -- see messages above. Continuing."
+    echo "WARNING: py-spy recording for Traditional failed -- see messages above. Continuing."
 fi
 
 echo
 echo "=== Recording FlameGraph: FaaS ($FG_RIDES_FAAS rides) ==="
-if perf record -F 999 -g -o "$RESULTS_DIR/perf_faas.data" -- \
-        "$PYTHON" FaaS/run_workload.py --num-rides "$FG_RIDES_FAAS" > /dev/null \
-   && perf script -i "$RESULTS_DIR/perf_faas.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
-        > "$RESULTS_DIR/flamegraph_faas.svg"; then
+if py-spy record -o "$RESULTS_DIR/flamegraph_faas.svg" --subprocesses -- \
+        "$PYTHON" FaaS/run_workload.py --num-rides "$FG_RIDES_FAAS" > /dev/null; then
     echo "Wrote $RESULTS_DIR/flamegraph_faas.svg"
 else
-    echo "WARNING: FlameGraph recording for FaaS failed -- see messages above. Continuing."
+    echo "WARNING: py-spy recording for FaaS failed -- see messages above. Continuing."
 fi
 
 echo
