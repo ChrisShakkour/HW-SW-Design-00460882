@@ -1,13 +1,13 @@
-# started on Wed Jul 15 12:40:48 2026
+# started on Wed Jul 15 14:41:18 2026
 
 
  Performance counter stats for 'python3 FaaS/run_workload.py --num-rides 200' (5 runs):
 
-      178342716853      cycles                    #    2.363 GHz                      ( +-  0.49% )
-      230150054248      instructions              #    1.31  insn per cycle           ( +-  0.00% )
-             34456      context-switches          #  456.567 /sec                     ( +-  0.38% )
-           2367936      page-faults               #   31.377 K/sec                    ( +-  0.00% )
-          76830.41 msec cpu-clock                 #    0.992 CPUs utilized            ( +-  0.49% )
+      175852925081      cycles                    #    2.324 GHz                      ( +-  0.05% )
+      230822559530      instructions              #    1.31  insn per cycle           ( +-  0.00% )
+             34257      context-switches          #  452.775 /sec                     ( +-  0.30% )
+           2367004      page-faults               #   31.285 K/sec                    ( +-  0.00% )
+          75790.39 msec cpu-clock                 #    0.968 CPUs utilized            ( +-  0.07% )
 
-            77.419 +- 0.524 seconds time elapsed  ( +-  0.68% )
+            78.294 +- 0.200 seconds time elapsed  ( +-  0.26% )
 
