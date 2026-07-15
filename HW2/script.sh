@@ -13,8 +13,15 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PYTHON=${PYTHON:-python3}
-NUM_RIDES=${NUM_RIDES:-200}   # rides fed to both the correctness diff AND the perf workload
+NUM_RIDES=${NUM_RIDES:-200}   # rides fed to both the correctness diff AND the perf stat workload
 REPS=${REPS:-5}               # perf stat repetitions, for mean +/- stddev instead of one noisy sample
+
+# FlameGraph recording needs the process to run long enough for a 999Hz sampler
+# to catch samples before it exits. Traditional finishes 200 rides in ~0.1s --
+# far too fast -- so it gets a much larger ride count just for this step. FaaS
+# is already slow per-ride (subprocess-per-call), so it gets a much smaller one.
+FG_RIDES_TRADITIONAL=${FG_RIDES_TRADITIONAL:-20000}
+FG_RIDES_FAAS=${FG_RIDES_FAAS:-50}
 
 # ---- Shared deterministic workload: same fleet/rides fed to both -----------
 echo "=== Running deterministic workload: Traditional ($NUM_RIDES rides) ==="
@@ -81,17 +88,26 @@ fi
 # Python function names instead of repeated CPython interpreter C frames.
 export PYTHONPERFSUPPORT=1
 
-echo "=== Recording FlameGraph: Traditional ==="
-perf record -F 999 -g -o "$RESULTS_DIR/perf_traditional.data" -- \
-    "$PYTHON" Traditional/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
-perf script -i "$RESULTS_DIR/perf_traditional.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
-    > "$RESULTS_DIR/flamegraph_traditional.svg"
+echo "=== Recording FlameGraph: Traditional ($FG_RIDES_TRADITIONAL rides) ==="
+if perf record -F 999 -g -o "$RESULTS_DIR/perf_traditional.data" -- \
+        "$PYTHON" Traditional/run_workload.py --num-rides "$FG_RIDES_TRADITIONAL" > /dev/null \
+   && perf script -i "$RESULTS_DIR/perf_traditional.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
+        > "$RESULTS_DIR/flamegraph_traditional.svg"; then
+    echo "Wrote $RESULTS_DIR/flamegraph_traditional.svg"
+else
+    echo "WARNING: FlameGraph recording for Traditional failed -- see messages above. Continuing."
+fi
 
-echo "=== Recording FlameGraph: FaaS ==="
-perf record -F 999 -g -o "$RESULTS_DIR/perf_faas.data" -- \
-    "$PYTHON" FaaS/run_workload.py --num-rides "$NUM_RIDES" > /dev/null
-perf script -i "$RESULTS_DIR/perf_faas.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
-    > "$RESULTS_DIR/flamegraph_faas.svg"
+echo
+echo "=== Recording FlameGraph: FaaS ($FG_RIDES_FAAS rides) ==="
+if perf record -F 999 -g -o "$RESULTS_DIR/perf_faas.data" -- \
+        "$PYTHON" FaaS/run_workload.py --num-rides "$FG_RIDES_FAAS" > /dev/null \
+   && perf script -i "$RESULTS_DIR/perf_faas.data" | "$STACKCOLLAPSE" | "$FLAMEGRAPH" \
+        > "$RESULTS_DIR/flamegraph_faas.svg"; then
+    echo "Wrote $RESULTS_DIR/flamegraph_faas.svg"
+else
+    echo "WARNING: FlameGraph recording for FaaS failed -- see messages above. Continuing."
+fi
 
 echo
 echo "=== Done -- send back the '$RESULTS_DIR' directory ==="
