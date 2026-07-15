@@ -1,0 +1,13 @@
+# started on Wed Jul 15 12:40:47 2026
+
+
+ Performance counter stats for 'python3 Traditional/run_workload.py --num-rides 200' (5 runs):
+
+         178825259      cycles                    #    2.336 GHz                      ( +-  0.33% )
+         250278631      instructions              #    1.39  insn per cycle           ( +-  0.07% )
+                16      context-switches          #  208.973 /sec                     ( +-  1.53% )
+              1947      page-faults               #   25.429 K/sec                    ( +-  0.04% )
+             76.00 msec cpu-clock                 #    0.956 CPUs utilized            ( +-  0.45% )
+
+           0.07950 +- 0.00229 seconds time elapsed  ( +-  2.89% )
+
